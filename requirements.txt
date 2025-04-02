@@ -1,0 +1,3 @@
+Flask>=2.0
+google-cloud-bigquery-analytics-hub-v1
+google-cloud-iam
