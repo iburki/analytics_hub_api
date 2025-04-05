@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, jsonify, flash, redirect, url_for
 from google.cloud import bigquery_data_exchange_v1beta1 
 from google.api_core import exceptions
-import os
+from google.iam.v1 import policy_pb2
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)  # Required for flash messages
@@ -31,8 +31,8 @@ def get_listings(project_id, exchange_id, location="us"):
 
 @app.route('/')
 def index():
-    project_id = 'enter project id'
-    if not project_id:
+    enter project id = 'enter project id'
+    if not enter project id:
         flash('No project ID found. Please make sure you are authenticated and have set the project ID.', 'error')
         return render_template('index.html', project_id=None, data_exchanges=[])
     data_exchanges = get_data_exchanges(project_id)
@@ -54,18 +54,17 @@ def manage_access():
         exchange_id = request.form['exchange_id']
         listing_id = request.form['listing_id']
         email = request.form['email']
-        location = "us"  # Default location
+        location = "us"
 
         listing_path = f"projects/{project_id}/locations/{location}/dataExchanges/{exchange_id}/listings/{listing_id}"
 
         if action == 'grant':
-            # Create subscriber IAM policy binding
-            policy = {
-                'bindings': [{
-                    'role': 'roles/bigquery.dataViewer',
-                    'members': [f'user:{email}']
-                }]
-            }
+            # Create policy using protocol buffer objects
+            policy = policy_pb2.Policy()
+            binding = policy_pb2.Binding()
+            binding.role = 'roles/analyticshub.subscriber'
+            binding.members.append(f'user:{email}')
+            policy.bindings.append(binding)
 
             analytics_hub_client.set_iam_policy(
                 request={
@@ -78,18 +77,25 @@ def manage_access():
         elif action == 'revoke':
             # Get current policy and remove user
             current_policy = analytics_hub_client.get_iam_policy(request={'resource': listing_path})
-            new_bindings = []
+            new_policy = policy_pb2.Policy()
+            
             for binding in current_policy.bindings:
-                members = [m for m in binding.members if m != f'user:{email}']
-                if members:
-                    binding.members = members
-                    new_bindings.append(binding)
-            current_policy.bindings = new_bindings
+                new_binding = policy_pb2.Binding()
+                new_binding.role = binding.role
+                
+                if binding.role == 'roles/analyticshub.subscriber':
+                    members = [m for m in binding.members if m != f'user:{email}']
+                    if members:
+                        new_binding.members.extend(members)
+                        new_policy.bindings.append(new_binding)
+                else:
+                    new_binding.members.extend(binding.members)
+                    new_policy.bindings.append(new_binding)
 
             analytics_hub_client.set_iam_policy(
                 request={
                     'resource': listing_path,
-                    'policy': current_policy
+                    'policy': new_policy
                 }
             )
             flash(f'Access revoked for {email}', 'success')
@@ -100,6 +106,7 @@ def manage_access():
         flash('Resource not found. Please check your listing details.', 'error')
     except Exception as e:
         flash(f'An error occurred: {str(e)}', 'error')
+        print(f"Error details: {str(e)}")  # For debugging
 
     return redirect(url_for('index'))
 
