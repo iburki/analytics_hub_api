@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, jsonify, flash, redirect, url
 from google.cloud import bigquery_data_exchange_v1beta1 
 from google.api_core import exceptions
 from google.iam.v1 import policy_pb2
+import os
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)  # Required for flash messages
@@ -31,8 +32,8 @@ def get_listings(project_id, exchange_id, location="us"):
 
 @app.route('/')
 def index():
-    enter project id = 'enter project id'
-    if not enter project id:
+    project_id = 'enter project id'
+    if not project_id:
         flash('No project ID found. Please make sure you are authenticated and have set the project ID.', 'error')
         return render_template('index.html', project_id=None, data_exchanges=[])
     data_exchanges = get_data_exchanges(project_id)
